@@ -864,6 +864,78 @@ identifié en I.1 pour `Flow` : une prolifération d'API parallèles
 (`StateFlow`/`SharedFlow`/`callbackFlow`) pour des variations d'un même
 concept qui aurait dû rester unifié dès la conception.
 
+### Scénario intégré : les trois piliers en un seul système
+
+Pris séparément, chaque exemple précédent illustre un mécanisme isolé. Ce
+qui justifie de les avoir conçus ensemble plutôt que comme trois
+extensions indépendantes ne devient visible que sur un scénario complet.
+Prenons "SentinelleAgricole" : un maillage de capteurs de stress hydrique
+dans une parcelle agricole, sans connectivité cloud garantie, où chaque
+capteur doit décider localement s'il faut déclencher l'irrigation ou
+remonter un diagnostic plus coûteux.
+
+```kotlin
+// Pilier 3 : chaque capteur, un microcontrôleur à 64 KiB, exécute une
+// première estimation bornée en énergie — silicium dédié si le capteur
+// n'a même pas de microcontrôleur généraliste (I.3, synthèse FPGA/ASIC).
+@TinyTarget(arch = Cortex_M0, ramBudget = 64.KiB, powerBudget = 12.microJoules.perInference)
+infer fun localStressScore(reading: Tensor<Shape[16], Int8>): Tensor<Shape[1], Float32>
+    using model = "stress-tinyquant.ktm"
+
+// Pilier 2 : les capteurs d'une même parcelle forment un essaim sans
+// chef fixe ; l'agrégateur est réélu si son niveau d'énergie chute —
+// aucune dépendance à un orchestrateur central ou à une connexion cloud.
+swarm ParcelMesh {
+    role sensorNode: SensingAgent
+    role aggregator: SoilHealthAgent
+        elect when { candidates -> candidates.maxByOrNull { it.batteryLevel } }
+    resilience { reelectOn(condition = { aggregator.batteryLevel < 10.percent }) }
+}
+
+// Pilier 2 (mémoire + consensus) : l'agrégateur élu confronte plusieurs
+// sources avant de conclure — pas une lecture de capteur isolée.
+agent SoilHealthAgent(zone: FieldZone) {
+    memory short_term: SensorWindow = SensorWindow.lastHours(6)
+    memory long_term: VectorStore<SeasonalPattern> by persistent(
+        ttl = 365.days,
+        retention = Retention.MinimizeNecessary,
+    )
+
+    on intent<StressAlert> { alert ->
+        val diagnosis = consensus(quorum = 2, of = 3) {
+            vote { localStressScore(alert.reading) }
+            vote { infer { seasonalDrift(short_term, long_term.similarTo(alert)) } }
+            vote { infer { peerCrossCheck(zone.neighbours) } }
+        } resolveWith { votes -> votes.majorityOrEscalate(to = FarmerReviewAgent) }
+
+        reply(diagnosis)
+    }
+}
+
+// Système d'effets unifié : la fonction porte, dans sa signature, tous
+// les effets qu'elle engage — suspension structurée, délégation
+// matérielle, et migration vers l'edge ou le cloud si et seulement si
+// la connectivité et le budget énergétique le permettent au moment du
+// checkpoint (Pilier 3). Le cloud n'apparaît qu'en dernier choix.
+effect fun irrigationDecision(alert: StressAlert): IrrigationPlan
+    with suspend, infer, migratable(preferred = [Sensor, Edge, Cloud])
+```
+
+La lecture de ce scénario révèle ce que la Partie III ne pouvait pas
+montrer pilier par pilier : le capteur qui déclenche l'alerte n'a besoin
+ni d'un microcontrôleur puissant (Pilier 3, synthèse silicium), ni d'une
+connexion cloud permanente (Pilier 3, autonomie de maillage), ni d'un
+orchestrateur central (Pilier 2, `swarm`) pour produire une décision
+fiable — le `consensus` (Pilier 2) compense l'incertitude d'une lecture
+unique en confrontant plusieurs sources sans jamais quitter le maillage
+local, et la fonction finale ne sollicite le cloud, via `checkpoint()`,
+que si le diagnostic reste ambigu après consensus local. C'est cette
+composition — pas chaque primitive isolément — qui constitue la
+proposition de valeur de Kotlin-X : un système d'IA distribué, résilient
+et sobre en énergie, écrit comme un seul programme séquentiel, sans
+qu'aucune des trois couches (silicium, essaim, migration) n'ait dû être
+assemblée à la main par le développeur.
+
 ### Risques et limites de la proposition
 
 Une conception honnête doit énoncer ce qui rend Kotlin-X difficile, pas
