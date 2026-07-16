@@ -95,7 +95,7 @@ platform type — une esquive du système de types by design, entérinée comme
 solution acceptable pour ne pas casser l'écosystème.
 
 **Verbosité cachée.** Le DSL builder pattern (`buildString { }`,
-`remember { }`, DSL Gradle/Compose) déplace la complexity syntaxique dans
+`remember { }`, DSL Gradle/Compose) déplace la complexité syntaxique dans
 les signatures de fonctions à récepteur étendu (`fun <T> T.apply(block: T.() -> Unit)`),
 ce qui rend l'inférence de type et les messages d'erreur nettement plus
 opaques que la syntaxe apparente ne le suggère — le "code court" cache un
