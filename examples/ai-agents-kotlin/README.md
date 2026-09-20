@@ -128,9 +128,24 @@ construction, JSON encoding, TLS handshake, and the `suspend`/HTTP bridge
 all work end to end for all three providers. **No valid API key was
 available in this session**, so a real successful completion (a real
 `tool_use`/`tool_calls`/`functionCall` round-trip driving `runAgentLoop`
-to a `FinalAnswer`) was not observed — only the offline `mockLlm` path
-was verified to actually reach `FinalAnswer` through `runAgentLoop`. If
-you run this with a real key, that's the one thing left to confirm.
+to a `FinalAnswer`) was not observed against a real provider — only the
+offline `mockLlm` path was verified that way.
+
+**Update:** since a real API key still isn't available, `StubServerDemo.kt`
+closes that gap a different way: it runs a local HTTP server
+(`com.sun.net.httpserver.HttpServer`, JDK-bundled, zero added
+dependency) that speaks the exact same wire shape as the real Anthropic
+Messages API, and points the *unmodified* `AnthropicHttpClient` at it via
+its existing `baseUri` constructor parameter. Running it drives a real
+two-request round trip through the production client code — request →
+`tool_use` response → `Calculator.run()` → second request with
+`tool_result` → final `text` response — and `runAgentLoop` reaches
+`FinalAnswer`, verified by an assertion in the demo and by executing it
+(output: `The stub server says 2 + 3 = 5`). This proves the client's
+request construction, JSON encoding/decoding, and tool-call handling are
+correct; it does **not** prove a real model's output happens to match
+what `AnthropicHttpClient` expects — that gap only closes with a real
+key against the real endpoint.
 
 ## What's intentionally out of scope here
 
