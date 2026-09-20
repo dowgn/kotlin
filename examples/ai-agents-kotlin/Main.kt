@@ -7,8 +7,9 @@
  *   ANTHROPIC_API_KEY=... java -cp ... MainKt "What is 2 + 3?"
  *   OPENAI_API_KEY=...    java -cp ... MainKt "What time is it?"
  *   GEMINI_API_KEY=...    java -cp ... MainKt "What is 2 + 3?"
+ *   MISTRAL_API_KEY=...   java -cp ... MainKt "What is 2 + 3?"
  *
- * Falls back to the offline mockLlm from Agents.kt if none of the three
+ * Falls back to the offline mockLlm from Agents.kt if none of the four
  * API key environment variables are set, so the wiring can be exercised
  * without network access or credentials.
  */
@@ -25,7 +26,10 @@ private fun selectLlmClient(): Pair<String, LlmClient> {
     System.getenv("GEMINI_API_KEY")?.let { key ->
         return "gemini" to GeminiHttpClient(apiKey = key, tools = allTools)
     }
-    return "mock (no ANTHROPIC_API_KEY / OPENAI_API_KEY / GEMINI_API_KEY set)" to mockLlm
+    System.getenv("MISTRAL_API_KEY")?.let { key ->
+        return "mistral" to MistralHttpClient(apiKey = key, tools = allTools)
+    }
+    return "mock (no ANTHROPIC_API_KEY / OPENAI_API_KEY / GEMINI_API_KEY / MISTRAL_API_KEY set)" to mockLlm
 }
 
 fun main(args: Array<String>) {

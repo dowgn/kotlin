@@ -116,6 +116,12 @@ only):
   scanning back through `history` for the matching `ToolCall`. Gemini also
   never assigns its own call id, so one is synthesized from the position
   in history.
+- **`MistralHttpClient`** — `api.mistral.ai/v1/chat/completions`. Mistral's
+  API is OpenAI-compatible in shape (`tool_calls`, `arguments` as a JSON
+  string), so this mirrors `OpenAiHttpClient` almost line for line.
+
+All four providers wired in so far (Anthropic, OpenAI, Google, Mistral)
+are US or EU/Western companies, per current scope for this project.
 
 **Verification performed:** all four files (`Agents.kt`, `Json.kt`,
 `HttpLlm.kt`, `OpenAiHttpClient.kt`, `GeminiHttpClient.kt`, `Main.kt`)
