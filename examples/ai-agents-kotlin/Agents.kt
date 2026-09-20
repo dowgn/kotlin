@@ -31,11 +31,23 @@ value class ToolCallId(val raw: String)
 
 sealed interface Tool {
     val name: String
+    val description: String
+    val inputSchema: JsonValue
     fun run(args: Map<String, String>): String
 }
 
 data object Calculator : Tool {
     override val name = "calculator"
+    override val description = "Evaluate a basic arithmetic operation on two numbers."
+    override val inputSchema = jsonObject {
+        "type" to "object"
+        "properties" to jsonObject {
+            "a" to jsonObject { "type" to "number" }
+            "b" to jsonObject { "type" to "number" }
+            "op" to jsonObject { "type" to "string"; "enum" to jsonArray(JsonValue.JsonString("+"), JsonValue.JsonString("-"), JsonValue.JsonString("*"), JsonValue.JsonString("/")) }
+        }
+        "required" to jsonArray(JsonValue.JsonString("a"), JsonValue.JsonString("b"), JsonValue.JsonString("op"))
+    }
     override fun run(args: Map<String, String>): String {
         val a = args.getValue("a").toDouble()
         val b = args.getValue("b").toDouble()
@@ -51,6 +63,11 @@ data object Calculator : Tool {
 
 data object Clock : Tool {
     override val name = "clock"
+    override val description = "Return the current Unix timestamp in milliseconds."
+    override val inputSchema = jsonObject {
+        "type" to "object"
+        "properties" to jsonObject {}
+    }
     override fun run(args: Map<String, String>): String = System.currentTimeMillis().toString()
 }
 

@@ -63,3 +63,46 @@ See `Agents.kt` for a runnable (stdlib-only) sketch: a two-tool agent loop
 (`Calculator`, `Clock`) that streams its reasoning, dispatches tool calls
 through a sealed hierarchy, and drives itself via a hand-rolled coroutine
 trampoline.
+
+## Talking to a real model: `Json.kt` + `HttpLlm.kt`
+
+The mock `LlmClient` in `Agents.kt` is enough to exercise the agent loop
+offline, but a genuine integration needs to call a real API. Two more
+files show that this doesn't require any dependency either:
+
+- **`Json.kt`** — a small `JsonValue` sealed type, a recursive-descent
+  parser, a `render()` serializer, and a `jsonObject { "k" to v }`
+  builder DSL. This is the stdlib-only stand-in for
+  `kotlinx.serialization`: more code to write once, zero dependencies to
+  pull in, and no reflection/codegen step.
+- **`HttpLlm.kt`** — `AnthropicHttpClient`, an `LlmClient` implementation
+  built on `java.net.http.HttpClient` (part of the JDK since 11, not an
+  added dependency) and `Json.kt`. It turns `AgentStep` history into the
+  Anthropic Messages API wire format, including tool definitions derived
+  from each `Tool.inputSchema`, and parses `tool_use`/`text` content
+  blocks back into `AgentStep`s. The async `CompletableFuture` from
+  `HttpClient.sendAsync` is bridged into a `suspend fun` with a five-line
+  `suspendCoroutine` wrapper — the same pattern any JDK async API needs,
+  again using only `kotlin.coroutines`.
+
+Both files were compiled and smoke-tested against a Kotlin 2.0.21
+compiler (bundled with this repo's Gradle distribution) with only
+`kotlin-stdlib` on the runtime classpath — no `kotlinx-coroutines-core`,
+no `kotlinx-serialization-json`, no HTTP client library. `AgentsKt.main`
+runs the mock two-tool loop end to end, and a JSON round-trip
+(`build → render → parse → equals`) passes.
+
+## What's intentionally out of scope here
+
+- **Tool schema via reflection** (`kotlin-reflect`) was deliberately
+  avoided in favor of each `Tool` declaring its own `inputSchema` — this
+  keeps the dependency footprint at exactly `kotlin-stdlib`, since
+  `kotlin-reflect` is a separate artifact from the standard library.
+- **True concurrent tool execution** (e.g. calling two tools in
+  parallel) is straightforward with `kotlinx.coroutines`' structured
+  concurrency but needs manual `Thread`/`ExecutorService` fan-out without
+  it; not included here since the demo agent is single-tool-call-at-a-time.
+- **Multiplatform (KMP) targets**: `HttpLlm.kt` is JVM-only because it
+  uses `java.net.http`. The rest of the files (`Agents.kt`, `Json.kt`)
+  use only `kotlin.*` and are portable to JS/Native/Wasm targets as-is —
+  only the HTTP transport needs a platform-specific `expect`/`actual`.
