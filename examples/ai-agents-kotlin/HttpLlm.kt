@@ -18,7 +18,7 @@ import kotlin.coroutines.resumeWithException
 import kotlin.coroutines.suspendCoroutine
 
 /** Suspends the calling coroutine until the async HTTP call completes, using only java.net.http + kotlin.coroutines. */
-private suspend fun HttpClient.sendSuspend(request: HttpRequest): HttpResponse<String> =
+suspend fun HttpClient.sendSuspend(request: HttpRequest): HttpResponse<String> =
     suspendCoroutine { cont ->
         sendAsync(request, HttpResponse.BodyHandlers.ofString())
             .whenComplete { response, throwable ->

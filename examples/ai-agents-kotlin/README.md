@@ -92,6 +92,46 @@ no `kotlinx-serialization-json`, no HTTP client library. `AgentsKt.main`
 runs the mock two-tool loop end to end, and a JSON round-trip
 (`build → render → parse → equals`) passes.
 
+## End-to-end wiring: `Main.kt`, three providers
+
+`Main.kt` wires `runAgentLoop` to a real `LlmClient` selected at runtime:
+
+```bash
+ANTHROPIC_API_KEY=... java -cp ... MainKt "What is 2 + 3?"
+OPENAI_API_KEY=...    java -cp ... MainKt "What time is it?"
+GEMINI_API_KEY=...    java -cp ... MainKt "What is 2 + 3?"
+```
+
+Two more `LlmClient` implementations were added alongside
+`AnthropicHttpClient`, same constraints (JDK `java.net.http` + `Json.kt`
+only):
+
+- **`OpenAiHttpClient`** — Chat Completions API (`/v1/chat/completions`),
+  tools as `{"type":"function","function":{...}}`, tool calls returned in
+  `message.tool_calls[].function.arguments` as a JSON *string* that gets
+  parsed back into a JSON object.
+- **`GeminiHttpClient`** — `generateContent` API, `contents`/`parts` with
+  `functionCall`/`functionResponse` parts. Gemini's `functionResponse`
+  needs the *tool name*, not an id, so `toolNameForCallId` recovers it by
+  scanning back through `history` for the matching `ToolCall`. Gemini also
+  never assigns its own call id, so one is synthesized from the position
+  in history.
+
+**Verification performed:** all four files (`Agents.kt`, `Json.kt`,
+`HttpLlm.kt`, `OpenAiHttpClient.kt`, `GeminiHttpClient.kt`, `Main.kt`)
+compile together cleanly against Kotlin 2.0.21 with only `kotlin-stdlib`
+on the classpath. `MainKt` was run against all three real API endpoints
+(`api.anthropic.com`, `api.openai.com`, `generativelanguage.googleapis.com`)
+with a deliberately invalid API key — each returned a genuine,
+provider-specific `4xx` error body, which confirms the request
+construction, JSON encoding, TLS handshake, and the `suspend`/HTTP bridge
+all work end to end for all three providers. **No valid API key was
+available in this session**, so a real successful completion (a real
+`tool_use`/`tool_calls`/`functionCall` round-trip driving `runAgentLoop`
+to a `FinalAnswer`) was not observed — only the offline `mockLlm` path
+was verified to actually reach `FinalAnswer` through `runAgentLoop`. If
+you run this with a real key, that's the one thing left to confirm.
+
 ## What's intentionally out of scope here
 
 - **Tool schema via reflection** (`kotlin-reflect`) was deliberately
